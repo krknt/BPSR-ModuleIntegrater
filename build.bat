@@ -1,0 +1,1 @@
+python -m PyInstaller --onefile --noconsole --noconfirm --icon "icon.ico" --name "BPSR-ModuleIntegrater" --add-data "templates;templates" --add-data "icon.ico;." integrated_tool.py
