@@ -10,7 +10,7 @@
 https://github.com/krknt/BPSR-ModuleIntegrater/releases/latest
 
 ## 操作説明動画
-ツイート後に追加
+https://x.com/PataPataEagle/status/2031586219881279927
 
 ## 主な機能
 
