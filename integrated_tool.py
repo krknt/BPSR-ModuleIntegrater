@@ -12,6 +12,16 @@ import mss
 import threading
 import time
 import copy
+import urllib.request
+import urllib.error
+import subprocess
+
+# ==========================================
+#  ★ アプリバージョン ★
+# ==========================================
+APP_VERSION = "0.2.0"
+GITHUB_REPO = "krknt/BPSR-ModuleIntegrater"
+GITHUB_API_URL = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
 
 # Windowsの高DPI設定(拡大率)による座標ズレを防ぐおまじない
 try:
@@ -366,6 +376,8 @@ class App:
         self.menu_bar = tk.Menu(self.root)
         self.option_menu = tk.Menu(self.menu_bar, tearoff=0)
         self.option_menu.add_command(label="出力設定", command=self.open_settings)
+        self.option_menu.add_separator()
+        self.option_menu.add_command(label="アップデート確認", command=self.check_for_update)
         self.menu_bar.add_cascade(label="⚙ 設定", menu=self.option_menu)
         self.root.config(menu=self.menu_bar)
 
@@ -933,9 +945,128 @@ class App:
     def toggle_topmost(self):
         self.root.attributes('-topmost', self.is_topmost.get())
 
+# ★★★ アップデート機能 ★★★
+    def _cleanup_old_exe(self):
+        """起動時に前回の更新で残った .old ファイルを削除する"""
+        try:
+            exe_path = sys.executable
+            old_path = exe_path + ".old"
+            if os.path.exists(old_path):
+                os.remove(old_path)
+        except Exception:
+            pass
+
+    def check_for_update(self):
+        """メニューから呼び出されるアップデート確認。非同期で実行する。"""
+        threading.Thread(target=self._check_for_update_thread, daemon=True).start()
+
+    def _check_for_update_thread(self):
+        """バックグラウンドで GitHub API を呼び出して更新を確認する"""
+        try:
+            req = urllib.request.Request(GITHUB_API_URL, headers={"Accept": "application/vnd.github.v3+json"})
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+
+            latest_tag = data.get("tag_name", "").lstrip("v")
+            if not latest_tag:
+                self.root.after(0, lambda: messagebox.showwarning("アップデート", "リリース情報を取得できませんでした。"))
+                return
+
+            if self._compare_versions(latest_tag, APP_VERSION) > 0:
+                # 新しいバージョンがある
+                download_url = None
+                for asset in data.get("assets", []):
+                    if asset.get("name", "").endswith(".exe"):
+                        download_url = asset.get("browser_download_url")
+                        break
+
+                if download_url:
+                    self.root.after(0, lambda: self._prompt_update(latest_tag, download_url))
+                else:
+                    self.root.after(0, lambda: messagebox.showinfo(
+                        "アップデート",
+                        f"新しいバージョン v{latest_tag} がありますが\n"
+                        f"ダウンロード可能な .exe が見つかりませんでした。\n"
+                        f"GitHub ページを確認してください。"))
+            else:
+                self.root.after(0, lambda: messagebox.showinfo(
+                    "アップデート",
+                    f"現在のバージョン v{APP_VERSION} は最新です。"))
+
+        except urllib.error.URLError:
+            self.root.after(0, lambda: messagebox.showerror("アップデート", "ネットワークに接続できませんでした。"))
+        except Exception as e:
+            self.root.after(0, lambda: messagebox.showerror("アップデート", f"エラーが発生しました:\n{e}"))
+
+    @staticmethod
+    def _compare_versions(v1, v2):
+        """バージョン文字列を比較する。v1 > v2 なら正, v1 == v2 なら0, v1 < v2 なら負"""
+        parts1 = [int(x) for x in v1.split(".")]
+        parts2 = [int(x) for x in v2.split(".")]
+        for a, b in zip(parts1, parts2):
+            if a != b:
+                return a - b
+        return len(parts1) - len(parts2)
+
+    def _prompt_update(self, tag_name, download_url):
+        """アップデートダイアログを表示する"""
+        result = messagebox.askyesno(
+            "アップデート",
+            f"新しいバージョン v{tag_name} が利用可能です。\n"
+            f"現在: v{APP_VERSION}\n\n"
+            f"ダウンロードして更新しますか？")
+        if result:
+            threading.Thread(target=self._do_update, args=(download_url, tag_name), daemon=True).start()
+
+    def _do_update(self, download_url, tag_name):
+        """.exe をダウンロードして置き換える"""
+        try:
+            exe_path = sys.executable
+            new_path = exe_path + ".new"
+            old_path = exe_path + ".old"
+
+            # ダウンロード
+            self.root.after(0, lambda: self.root.title(f"BPSR - ダウンロード中..."))
+            urllib.request.urlretrieve(download_url, new_path)
+
+            # 現在の exe を .old にリネーム
+            if os.path.exists(old_path):
+                os.remove(old_path)
+            os.rename(exe_path, old_path)
+
+            # 新しい exe を元のパスにリネーム
+            os.rename(new_path, exe_path)
+
+            self.root.after(0, lambda: self._update_complete(tag_name, exe_path))
+
+        except Exception as e:
+            # ロールバック: .new があれば削除、.old があれば戻す
+            try:
+                if os.path.exists(new_path) and not os.path.exists(exe_path):
+                    if os.path.exists(old_path):
+                        os.rename(old_path, exe_path)
+                if os.path.exists(new_path):
+                    os.remove(new_path)
+            except Exception:
+                pass
+            self.root.after(0, lambda: messagebox.showerror("アップデート失敗", f"更新に失敗しました:\n{e}"))
+            self.root.after(0, lambda: self.root.title("BPSR - Module Integrater"))
+
+    def _update_complete(self, tag_name, exe_path):
+        """アップデート完了後の処理"""
+        self.root.title("BPSR - Module Integrater")
+        result = messagebox.askyesno(
+            "アップデート完了",
+            f"v{tag_name} へのアップデートが完了しました。\n"
+            f"アプリを再起動しますか？")
+        if result:
+            subprocess.Popen([exe_path])
+            self.root.destroy()
+
 if __name__ == "__main__":
     root = tk.Tk()
     root.geometry("1200x850")
     root.attributes('-topmost', False)
     app = App(root)
+    app._cleanup_old_exe()
     root.mainloop()
