@@ -744,22 +744,32 @@ class App:
         
         header_jp = ["ID"] + list(TRANSLATION_MAP.values())
 
+        # エクスポート用にデータを複製し、nullや空文字を「0」に変換
+        export_data = copy.deepcopy(self.stock_data)
+        for item in export_data:
+            for row in item['data']:
+                for stat in row['stats']:
+                    val = stat.get('value', "0")
+                    if val is None or str(val).strip().lower() in ["", "null", "none", "+"]:
+                        stat['value'] = "0"
+
         if path.endswith(".json"):
             with open(path, 'w', encoding='utf-8') as f:
-                json.dump(self.stock_data, f, indent=4, ensure_ascii=False)
+                json.dump(export_data, f, indent=4, ensure_ascii=False)
         else:
             with open(path, 'w', newline='', encoding='utf-8-sig') as f:
                 writer = csv.writer(f)
                 writer.writerow(header_jp)
                 
                 global_id = 1
-                for item in self.stock_data:
+                for item in export_data:
                     for row in item['data']:
                         current_stats = {stat['type']: stat['value'] for stat in row['stats']}
                         csv_row = [global_id]
                         for effect in TRANSLATION_MAP.keys():
-                            val = current_stats.get(effect, "0")
-                            if val == "": val = "0"
+                            val = str(current_stats.get(effect, "0"))
+                            if val.strip().lower() in ["", "null", "none"]:
+                                val = "0"
                             val = val.replace("+","")
                             csv_row.append(val)
 
