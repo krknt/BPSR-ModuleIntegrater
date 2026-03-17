@@ -957,8 +957,7 @@ class App:
     def _cleanup_old_exe(self):
         """起動時に前回の更新で残った .old ファイルを削除する"""
         try:
-            exe_path = sys.executable
-            old_path = exe_path + ".old"
+            old_path = os.path.join(self._get_config_dir(), "previous_version.exe.old")
             if os.path.exists(old_path):
                 os.remove(old_path)
         except Exception:
@@ -1031,13 +1030,14 @@ class App:
         try:
             exe_path = sys.executable
             new_path = exe_path + ".new"
-            old_path = exe_path + ".old"
+            old_path = os.path.join(self._get_config_dir(), "previous_version.exe.old")
 
             # ダウンロード
             self.root.after(0, lambda: self.root.title(f"BPSR - ダウンロード中..."))
             urllib.request.urlretrieve(download_url, new_path)
 
-            # 現在の exe を .old にリネーム
+            # 現在の exe を config フォルダの .old にリネーム
+            # 注意: 同一ドライブ内であれば os.rename が高速
             if os.path.exists(old_path):
                 os.remove(old_path)
             os.rename(exe_path, old_path)
@@ -1074,12 +1074,16 @@ class App:
 # ★★★ 設定の保存・読み込み ★★★
     CONFIG_FILE = "config.json"
 
-    def _get_config_path(self):
-        """設定ファイルのパスを返す (%APPDATA%\BPSR-ModuleIntegrater\)"""
+    def _get_config_dir(self):
+        """設定フォルダのパスを返す (%APPDATA%\BPSR-ModuleIntegrater\)"""
         appdata = os.environ.get("APPDATA", os.path.expanduser("~"))
         config_dir = os.path.join(appdata, "BPSR-ModuleIntegrater")
         os.makedirs(config_dir, exist_ok=True)
-        return os.path.join(config_dir, self.CONFIG_FILE)
+        return config_dir
+
+    def _get_config_path(self):
+        """設定ファイルのパスを返す"""
+        return os.path.join(self._get_config_dir(), self.CONFIG_FILE)
 
     def _save_config(self):
         """現在のパラメータを JSON に保存する"""
