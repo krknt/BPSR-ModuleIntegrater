@@ -12,6 +12,7 @@ import mss
 import threading
 import time
 import copy
+from module_tab import ModuleTab
 import urllib.request
 import urllib.error
 import subprocess
@@ -19,7 +20,7 @@ import subprocess
 # ==========================================
 #  ★ アプリバージョン ★
 # ==========================================
-APP_VERSION = "0.2.2"
+APP_VERSION = "0.3.0"
 GITHUB_REPO = "krknt/BPSR-ModuleIntegrater"
 GITHUB_API_URL = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
 
@@ -381,16 +382,29 @@ class App:
         self.menu_bar.add_cascade(label="⚙ 設定", menu=self.option_menu)
         self.root.config(menu=self.menu_bar)
 
-        # Layout
-        self.ctrl_frame = tk.Frame(root, width=300, padx=10, pady=10, bg="#f0f0f0")
+        # ★ ttk.Notebook でタブ化
+        self.notebook = ttk.Notebook(root)
+        self.notebook.pack(fill=tk.BOTH, expand=True)
+
+        # --- キャプチャタブ ---
+        self.capture_tab = tk.Frame(self.notebook)
+        self.notebook.add(self.capture_tab, text="キャプチャ")
+
+        # --- モジュールタブ ---
+        self.module_tab_frame = tk.Frame(self.notebook)
+        self.notebook.add(self.module_tab_frame, text="モジュール")
+        self.module_tab = ModuleTab(self.module_tab_frame)
+
+        # Layout (キャプチャタブ内)
+        self.ctrl_frame = tk.Frame(self.capture_tab, width=300, padx=10, pady=10, bg="#f0f0f0")
         self.ctrl_frame.pack(side=tk.LEFT, fill=tk.Y)
         self.ctrl_frame.pack_propagate(False)
 
-        self.right_frame = tk.Frame(root, width=350, bg="#ffffff")
+        self.right_frame = tk.Frame(self.capture_tab, width=350, bg="#ffffff")
         self.right_frame.pack(side=tk.RIGHT, fill=tk.Y)
         self.right_frame.pack_propagate(False)
 
-        self.view_frame = tk.Frame(root, bg="gray")
+        self.view_frame = tk.Frame(self.capture_tab, bg="gray")
         self.view_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         self.canvas = tk.Canvas(self.view_frame, bg="gray", cursor="arrow")
         self.canvas.pack(fill=tk.BOTH, expand=True)
@@ -1156,7 +1170,7 @@ class App:
 
 if __name__ == "__main__":
     root = tk.Tk()
-    root.geometry("1200x850")
+    root.geometry("1210x850")
     root.attributes('-topmost', False)
     app = App(root)
     app._cleanup_old_exe()
