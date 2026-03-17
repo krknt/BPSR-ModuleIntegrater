@@ -358,6 +358,17 @@ class App:
         self.last_result_hash = "" 
         self.result_history_buffer = [] # 重複チェック用バッファ(直近2回分)
 
+        # ★ ユーザーオプション
+        self.zero_pad_empty = tk.BooleanVar(value=True)
+        self.show_advanced_params = False # コラプスの初期状態
+
+        # Menu bar
+        self.menu_bar = tk.Menu(self.root)
+        self.option_menu = tk.Menu(self.menu_bar, tearoff=0)
+        self.option_menu.add_command(label="出力設定", command=self.open_settings)
+        self.menu_bar.add_cascade(label="⚙ 設定", menu=self.option_menu)
+        self.root.config(menu=self.menu_bar)
+
         # Layout
         self.ctrl_frame = tk.Frame(root, width=300, padx=10, pady=10, bg="#f0f0f0")
         self.ctrl_frame.pack(side=tk.LEFT, fill=tk.Y)
@@ -394,20 +405,44 @@ class App:
         self.btn_realtime.pack(side=tk.LEFT, padx=2)
         
         # 分割設定
-        self._add_label("分割 (緑枠) の調整")
-        self.s_block = self._add_slider("ブロックサイズ (分割調整)", 3, 31, 11, res=2)
+        lbl_split = self._create_label("分割 (緑枠) の調整")
+        lbl_split.pack(pady=(15,5), anchor="w")
+        
+        self.block_frame, self.s_block = self._create_slider_stepper(self.ctrl_frame, "ブロックサイズ:", 3, 31, 11, res=2)
+        self.block_frame.pack(fill=tk.X, pady=(0, 5))
 
         # 認識設定
-        self._add_label("認識精度の調整")
-        self.s_scale = self._add_slider("サイズ倍率 (青枠を合わせる)", 0.5, 2.0, 1.0, res=0.05)
-        self.s_shape = self._add_slider("効果アイコンしきい値 (出ない時は下げる)", 0.1, 1.0, 0.60, res=0.05)
-        self.s_digit = self._add_slider("数字しきい値 (出ない時は下げる)", 0.1, 1.0, 0.60, res=0.05) 
+        lbl_recog = self._create_label("認識精度の調整")
+        lbl_recog.pack(pady=(15,5), anchor="w")
+        
+        self.scale_frame, self.s_scale = self._create_slider_stepper(self.ctrl_frame, "サイズ倍率:", 0.5, 2.0, 1.0, res=0.05)
+        self.scale_frame.pack(fill=tk.X, pady=(0, 5))
+        
+        self.advanced_widgets = []
+        
+        # 詳細設定コラプスのトグルボタン
+        self.btn_collapse = tk.Button(self.ctrl_frame, text="▼ 詳細パラメータを開く", command=self.toggle_advanced_ui, bg="#e0e0e0", relief=tk.FLAT)
+        self.btn_collapse.pack(fill=tk.X, pady=(15, 5))
+
+        # 詳細パラメータを格納する専用のフレーム（ボタンの直下に配置）
+        self.advanced_frame = tk.Frame(self.ctrl_frame, bg="#f0f0f0")
+        
+        self.shape_frame, self.s_shape = self._create_slider_stepper(self.advanced_frame, "アイコン精度:", 0.1, 1.0, 0.60, res=0.05)
+        self.advanced_widgets.append(self.shape_frame)
+        
+        self.digit_frame, self.s_digit = self._create_slider_stepper(self.advanced_frame, "数字精度:", 0.1, 1.0, 0.60, res=0.05) 
+        self.advanced_widgets.append(self.digit_frame)
         
         self.show_guide = tk.BooleanVar(value=True)
-        tk.Checkbutton(self.ctrl_frame, text="サイズ確認用の青枠を表示", variable=self.show_guide, command=self.toggle_guide, bg="#f0f0f0").pack(pady=5)
+        self.chk_guide = self._create_checkbox(self.advanced_frame, "青枠表示", self.show_guide, self.toggle_guide)
+        self.advanced_widgets.append(self.chk_guide)
+        
+        # 初期状態は隠すため pack() せず、必要時に toggle_advanced_ui で pack する
+        self.update_advanced_ui()
 
         self.is_topmost = tk.BooleanVar(value=False)
-        tk.Checkbutton(self.ctrl_frame, text="ウィンドウを最前面に固定", variable=self.is_topmost, command=self.toggle_topmost, bg="#f0f0f0").pack(pady=5)
+        self.topmost_frame = self._create_checkbox(self.ctrl_frame, "最前面に固定", self.is_topmost, self.toggle_topmost)
+        self.topmost_frame.pack(fill=tk.X, pady=5)
 
         tk.Button(self.ctrl_frame, text="解析実行 (手動)", command=self.run_analysis, 
                   bg="lightblue", height=2, font=("Meiryo UI", 11, "bold")).pack(fill=tk.X, pady=20)
@@ -444,9 +479,123 @@ class App:
         tk.Button(self.right_frame, text="まとめて保存 (CSV/JSON)", command=self.export_all, 
                   bg="lightgreen", height=2, font=("Meiryo UI", 11, "bold")).pack(fill=tk.X, padx=5, pady=10)
 
+    # --- Menu Options Logic ---
+    def open_settings(self):
+        settings_win = tk.Toplevel(self.root)
+        settings_win.title("出力設定")
+        settings_win.geometry("300x180")
+        settings_win.resizable(False, False)
+        settings_win.transient(self.root)
+        settings_win.grab_set()
+
+        # メインウィンドウの中央に配置
+        settings_win.update_idletasks()
+        sw = settings_win.winfo_width()
+        sh = settings_win.winfo_height()
+        rx = self.root.winfo_rootx()
+        ry = self.root.winfo_rooty()
+        rw = self.root.winfo_width()
+        rh = self.root.winfo_height()
+        x = rx + (rw - sw) // 2
+        y = ry + (rh - sh) // 2
+        settings_win.geometry(f"+{x}+{y}")
+
+        frame = tk.Frame(settings_win, padx=20, pady=20)
+        frame.pack(fill=tk.BOTH, expand=True)
+
+        tk.Label(frame, text="エクスポート設定", font=("Meiryo UI", 10, "bold")).pack(anchor=tk.W, pady=(0, 10))
+
+        chk_frame = tk.Frame(frame)
+        chk_frame.pack(fill=tk.X, pady=(0, 10))
+        tk.Label(chk_frame, text="空の値を0埋めで出力 (CSV/JSON)", font=("Meiryo UI", 9)).pack(side=tk.LEFT)
+        tk.Checkbutton(chk_frame, variable=self.zero_pad_empty).pack(side=tk.RIGHT)
+
+        tk.Button(frame, text="閉じる", command=settings_win.destroy, width=10).pack(pady=(15, 0))
+
+    def toggle_advanced_ui(self):
+        self.show_advanced_params = not self.show_advanced_params
+        if self.show_advanced_params:
+            self.btn_collapse.config(text="▲ 詳細パラメータを閉じる")
+        else:
+            self.btn_collapse.config(text="▼ 詳細パラメータを開く")
+        self.update_advanced_ui()
+
+    def update_advanced_ui(self):
+        show = self.show_advanced_params
+        if show:
+            for w in self.advanced_widgets:
+                w.pack(fill=tk.X, pady=(2, 2))
+                        
+            # ボタンの直下にフレームごと表示する
+            self.advanced_frame.pack(fill=tk.X, after=self.btn_collapse)
+        else:
+            self.advanced_frame.pack_forget()
+
     # --- GUI Helper Methods ---
+    def _create_label(self, text):
+        lbl = tk.Label(self.ctrl_frame, text=f"{text}", bg="#f0f0f0", font=("Meiryo UI", 9, "bold"))
+        return lbl
+        
+    def _create_slider_stepper(self, parent_frame, text, min_v, max_v, def_v, res=1):
+        outer = tk.Frame(parent_frame, bg="#f0f0f0")
+        
+        var = tk.DoubleVar(value=def_v) if isinstance(def_v, float) else tk.IntVar(value=def_v)
+
+        val_lbl = tk.Label(outer, text=f"{def_v:.2f}" if isinstance(def_v, float) else f"{def_v}", bg="#f0f0f0", font=("Meiryo UI", 9, "bold"), width=4, anchor="e")
+
+        def update_lbl(*args):
+            v = var.get()
+            val_lbl.config(text=f"{v:.2f}" if isinstance(def_v, float) else f"{v}")
+        var.trace_add("write", update_lbl)
+
+        def adjust(delta):
+            v = var.get() + delta
+            if v < min_v: v = min_v
+            if v > max_v: v = max_v
+            
+            if isinstance(def_v, float):
+                v_f = float(round(float(v / res)) * res)
+                v_f = float(f"{v_f:.4f}")
+                var.set(v_f) # type: ignore
+            else:
+                v_i = int(round(float(v / res)) * res)
+                var.set(v_i) # type: ignore
+                
+            self.update_preview()
+
+        # 配置: [名称][スペース][-][スライダー][+][数値]
+        tk.Label(outer, text=text, bg="#f0f0f0", font=("Meiryo UI", 9)).pack(side=tk.LEFT)
+
+        # 右側から逆順に配置
+        val_lbl.pack(side=tk.RIGHT, padx=(2, 0))
+
+        btn_plus = tk.Button(outer, text="＋", command=lambda: adjust(res), font=("Meiryo UI", 8, "bold"), bg="#ffffff", bd=1, padx=4, pady=0)
+        btn_plus.pack(side=tk.RIGHT, padx=0)
+
+        scale = tk.Scale(outer, from_=min_v, to=max_v, orient=tk.HORIZONTAL, resolution=res, 
+                         showvalue=False, variable=var, bg="#f0f0f0", sliderlength=20, length=80, width=15)
+        scale.bind("<ButtonRelease-1>", lambda e: self.update_preview())
+        scale.pack(side=tk.RIGHT, padx=0)
+
+        btn_minus = tk.Button(outer, text="－", command=lambda: adjust(-res), font=("Meiryo UI", 8, "bold"), bg="#ffffff", bd=1, padx=4, pady=0)
+        btn_minus.pack(side=tk.RIGHT, padx=0)
+
+        scale.get = var.get
+        return outer, scale
+
+    def _create_checkbox(self, parent_frame, text, variable, command=None):
+        """[名称][いい感じのスペース][チェックボックス] のレイアウトを返す"""
+        frame = tk.Frame(parent_frame, bg="#f0f0f0")
+        tk.Label(frame, text=text, bg="#f0f0f0", font=("Meiryo UI", 9)).pack(side=tk.LEFT)
+        chk = tk.Checkbutton(frame, variable=variable, command=command, bg="#f0f0f0")
+        chk.pack(side=tk.RIGHT)
+        return frame
+
     def _add_label(self, text):
-        tk.Label(self.ctrl_frame, text=f"{text}", bg="#f0f0f0", font=("Meiryo UI", 9, "bold")).pack(pady=(15,5), anchor="w")
+        lbl = tk.Label(self.ctrl_frame, text=f"{text}", bg="#f0f0f0", font=("Meiryo UI", 9, "bold"))
+        lbl.pack(pady=(15,5), anchor="w")
+        return lbl
+        
     def _add_slider(self, label, min_v, max_v, def_v, res=1):
         tk.Label(self.ctrl_frame, text=label, bg="#f0f0f0", font=("Meiryo UI", 9)).pack(anchor="w")
         scale = tk.Scale(self.ctrl_frame, from_=min_v, to=max_v, orient=tk.HORIZONTAL, resolution=res, bg="#f0f0f0")
@@ -744,14 +893,15 @@ class App:
         
         header_jp = ["ID"] + list(TRANSLATION_MAP.values())
 
-        # エクスポート用にデータを複製し、nullや空文字を「0」に変換
+        # エクスポート用にデータを複製し、nullや空文字をオプションに従って変換
         export_data = copy.deepcopy(self.stock_data)
+        zero_pad = self.zero_pad_empty.get()
         for item in export_data:
             for row in item['data']:
                 for stat in row['stats']:
-                    val = stat.get('value', "0")
+                    val = stat.get('value', "0" if zero_pad else "")
                     if val is None or str(val).strip().lower() in ["", "null", "none", "+"]:
-                        stat['value'] = "0"
+                        stat['value'] = "0" if zero_pad else ""
 
         if path.endswith(".json"):
             with open(path, 'w', encoding='utf-8') as f:
@@ -767,9 +917,10 @@ class App:
                         current_stats = {stat['type']: stat['value'] for stat in row['stats']}
                         csv_row = [global_id]
                         for effect in TRANSLATION_MAP.keys():
-                            val = str(current_stats.get(effect, "0"))
-                            if val.strip().lower() in ["", "null", "none"]:
-                                val = "0"
+                            default_val = "0" if zero_pad else ""
+                            val = str(current_stats.get(effect, default_val))
+                            if val.strip().lower() in ["", "null", "none", "+"]:
+                                val = default_val
                             val = val.replace("+","")
                             csv_row.append(val)
 
