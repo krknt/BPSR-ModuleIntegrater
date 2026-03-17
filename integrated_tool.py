@@ -462,6 +462,12 @@ class App:
         for s in [self.s_block, self.s_scale, self.s_shape, self.s_digit]:
             s.config(command=self.update_preview)
 
+        # 設定の読み込み
+        self._load_config()
+
+        # 終了時に設定を保存
+        self.root.protocol("WM_DELETE_WINDOW", self._on_close)
+
         # --- Right Panel ---
         self.curr_frame = tk.LabelFrame(self.right_frame, text="現在の解析結果 (ダブルクリック修正)", bg="white")
         self.curr_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
@@ -495,7 +501,7 @@ class App:
     def open_settings(self):
         settings_win = tk.Toplevel(self.root)
         settings_win.title("出力設定")
-        settings_win.geometry("300x180")
+        settings_win.geometry("300x220")
         settings_win.resizable(False, False)
         settings_win.transient(self.root)
         settings_win.grab_set()
@@ -521,6 +527,8 @@ class App:
         chk_frame.pack(fill=tk.X, pady=(0, 10))
         tk.Label(chk_frame, text="空の値を0埋めで出力 (CSV/JSON)", font=("Meiryo UI", 9)).pack(side=tk.LEFT)
         tk.Checkbutton(chk_frame, variable=self.zero_pad_empty).pack(side=tk.RIGHT)
+
+        tk.Button(frame, text="設定フォルダを開く", command=self._open_config_dir, font=("Meiryo UI", 9)).pack(fill=tk.X, pady=(10, 0))
 
         tk.Button(frame, text="閉じる", command=settings_win.destroy, width=10).pack(pady=(15, 0))
 
@@ -1062,6 +1070,85 @@ class App:
         if result:
             subprocess.Popen([exe_path])
             self.root.destroy()
+
+# ★★★ 設定の保存・読み込み ★★★
+    CONFIG_FILE = "config.json"
+
+    def _get_config_path(self):
+        """設定ファイルのパスを返す (%APPDATA%\BPSR-ModuleIntegrater\)"""
+        appdata = os.environ.get("APPDATA", os.path.expanduser("~"))
+        config_dir = os.path.join(appdata, "BPSR-ModuleIntegrater")
+        os.makedirs(config_dir, exist_ok=True)
+        return os.path.join(config_dir, self.CONFIG_FILE)
+
+    def _save_config(self):
+        """現在のパラメータを JSON に保存する"""
+        config = {
+            "block_size": self.s_block.get(),
+            "size_scale": self.s_scale.get(),
+            "shape_threshold": self.s_shape.get(),
+            "digit_threshold": self.s_digit.get(),
+            "show_guide": self.show_guide.get(),
+            "is_topmost": self.is_topmost.get(),
+            "zero_pad_empty": self.zero_pad_empty.get(),
+            "show_advanced_params": self.show_advanced_params,
+        }
+        try:
+            with open(self._get_config_path(), "w", encoding="utf-8") as f:
+                json.dump(config, f, indent=2, ensure_ascii=False)
+        except Exception:
+            pass
+
+    def _load_config(self):
+        """保存済みのパラメータを JSON から読み込む"""
+        path = self._get_config_path()
+        if not os.path.exists(path):
+            return
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                config = json.load(f)
+
+            # スライダーの値を復元
+            if "block_size" in config:
+                self.s_block.set(config["block_size"])
+            if "size_scale" in config:
+                self.s_scale.set(config["size_scale"])
+            if "shape_threshold" in config:
+                self.s_shape.set(config["shape_threshold"])
+            if "digit_threshold" in config:
+                self.s_digit.set(config["digit_threshold"])
+
+            # チェックボックスの値を復元
+            if "show_guide" in config:
+                self.show_guide.set(config["show_guide"])
+                self.toggle_guide()
+            if "is_topmost" in config:
+                self.is_topmost.set(config["is_topmost"])
+                self.toggle_topmost()
+            if "zero_pad_empty" in config:
+                self.zero_pad_empty.set(config["zero_pad_empty"])
+
+            # コラプスの状態を復元
+            if "show_advanced_params" in config and config["show_advanced_params"]:
+                self.show_advanced_params = True
+                self.btn_collapse.config(text="▲ 詳細パラメータを閉じる")
+                self.update_advanced_ui()
+
+        except Exception:
+            pass
+
+    def _on_close(self):
+        """ウィンドウ閉じる時に設定を保存して終了する"""
+        self._save_config()
+        self.root.destroy()
+
+    def _open_config_dir(self):
+        """設定ファイルが保存されているフォルダをエクスプローラーで開く"""
+        path = os.path.dirname(self._get_config_path())
+        if os.path.exists(path):
+            os.startfile(path)
+        else:
+            messagebox.showerror("エラー", "設定フォルダが見つかりません。")
 
 if __name__ == "__main__":
     root = tk.Tk()
