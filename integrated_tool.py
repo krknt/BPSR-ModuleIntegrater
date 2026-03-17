@@ -19,7 +19,7 @@ import subprocess
 # ==========================================
 #  ★ アプリバージョン ★
 # ==========================================
-APP_VERSION = "0.2.0"
+APP_VERSION = "0.2.2"
 GITHUB_REPO = "krknt/BPSR-ModuleIntegrater"
 GITHUB_API_URL = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
 
