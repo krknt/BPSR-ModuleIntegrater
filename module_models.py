@@ -161,8 +161,8 @@ def calculate_module_stats(effect_summary: List[ModuleEffectStatus], link_total:
     """全エフェクトのレベルからステータスボーナスを計算する"""
     stats = ModuleStats()
 
-    # リンク効果: 敏捷 += linkTotal * 2
-    stats.agility += link_total * 2
+    # リンク効果: 筋力/知力/敏捷 += linkTotal * 2
+    stats.sia += link_total * 2
 
     for status in effect_summary:
         if status.level == 0:

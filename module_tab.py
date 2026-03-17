@@ -197,8 +197,8 @@ class ModuleTab:
         self.link_total_var = tk.StringVar(value="0")
         tk.Label(left, textvariable=self.link_total_var, bg=COL_GREEN_BG,
                  fg=COL_GREEN, font=("Meiryo UI", 24, "bold")).pack()
-        self.link_agility_var = tk.StringVar(value="敏捷 +0")
-        tk.Label(left, textvariable=self.link_agility_var, bg=COL_GREEN,
+        self.link_sia_var = tk.StringVar(value="筋力/知力/敏捷 +0")
+        tk.Label(left, textvariable=self.link_sia_var, bg=COL_GREEN,
                  fg="white", font=("Meiryo UI", 9, "bold"), padx=8, pady=2).pack()
 
         # 右: 効果カード群
@@ -259,7 +259,7 @@ class ModuleTab:
 
         # リンク効果
         self.link_total_var.set(str(self.link_total))
-        self.link_agility_var.set(f"敏捷 +{self.link_total * 2}")
+        self.link_sia_var.set(f"筋力/知力/敏捷 +{self.link_total * 2}")
 
         # 装備数
         eq_count = sum(1 for m in self.modules if m.is_equipped)
